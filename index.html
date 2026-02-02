@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="he">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>בדרך לחופה - מיכל וינון</title>
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/11.6.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/11.6.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore-compat.js"></script>
+    
+    <style>
+        :root {
+            --gold: #d4af37;
+            --gold-light: #f1d592;
+            --white: #ffffff;
+            --text: #4a4a4a;
+            --success: #4CAF50;
+            --error: #e57373;
+        }
+
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            color: var(--text);
+            margin: 0;
+            padding: 0;
+            direction: rtl;
+            background-image: url('https://images.unsplash.com/photo-1511795409834-ef04bbd61622?q=80&w=2069&auto=format&fit=crop');
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
+            min-height: 100vh;
+        }
+
+        body::before {
+            content: "";
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(255, 250, 245, 0.75);
+            backdrop-filter: blur(4px);
+            z-index: -1;
+        }
+
+        .container {
+            width: 95%;
+            max-width: 650px;
+            margin: 20px auto;
+            padding: 25px;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 25px;
+            box-shadow: 0 15px 35px rgba(0,0,0,0.1);
+            text-align: center;
+            border: 1px solid rgba(212, 175, 55, 0.3);
+        }
+
+        h1 { background: linear-gradient(135deg, #d4af37, #f1d592); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-size: 2.2rem; margin-top: 10px; }
+
+        .screen { display: none; animation: fadeIn 0.5s ease; }
+        .active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+        button {
+            padding: 12px 25px;
+            font-size: 18px;
+            border-radius: 50px;
+            border: none;
+            background: linear-gradient(135deg, #d4af37, #b8962d);
+            color: white;
+            cursor: pointer;
+            transition: 0.3s;
+            margin: 8px;
+            font-weight: bold;
+            box-shadow: 0 4px 10px rgba(212, 175, 55, 0.3);
+        }
+        button:hover { transform: scale(1.03); }
+        button:disabled { background: #ccc; cursor: not-allowed; transform: none; }
+
+        .chuppah-visual {
+            width: 100%;
+            max-width: 400px;
+            margin: 0 auto 20px;
+            border-radius: 20px;
+            overflow: hidden;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            background: white;
+            border: 2px solid var(--gold-light);
+        }
+        .chuppah-visual img { width: 100%; display: block; object-fit: cover; }
+
+        .chuppah-path {
+            height: 300px;
+            background: radial-gradient(circle, #fdf8f5 1px, transparent 1px);
+            background-size: 20px 20px;
+            position: relative;
+            margin: 30px 0;
+            border-bottom: 3px solid var(--gold-light);
+        }
+
+        .participant-icon {
+            position: absolute;
+            bottom: 20px;
+            transition: all 1s cubic-bezier(0.34, 1.56, 0.64, 1);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            z-index: 10;
+        }
+
+        .avatar-circle {
+            width: 55px;
+            height: 55px;
+            background: white;
+            border: 3px solid var(--gold);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 28px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+        }
+
+        .participant-info { font-size: 10px; background: white; padding: 3px 6px; border-radius: 8px; margin-top: 5px; white-space: nowrap; }
+
+        .selection-card { padding: 12px; border: 2px solid #eee; border-radius: 15px; cursor: pointer; transition: 0.2s; background: white; font-size: 13px; margin-bottom: 8px; }
+        .selection-card.selected { border-color: var(--gold); background: #fffdf5; }
+
+        .avatar-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(40px, 1fr)); gap: 10px; padding: 10px; background: white; border-radius: 15px; }
+        .avatar-option { font-size: 24px; cursor: pointer; border: 2px solid #eee; border-radius: 50%; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; }
+        .avatar-option.selected { border-color: var(--gold); background: #fffdf5; }
+
+        input { padding: 15px; width: 85%; border-radius: 15px; border: 1px solid #ddd; margin-bottom: 15px; text-align: center; }
+
+        #msg { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); padding: 10px 30px; border-radius: 50px; color: white; display: none; z-index: 2000; font-weight: bold; }
+        
+        /* Couple View Specific */
+        .couple-btn { width: 100%; margin: 10px 0; background: white; color: var(--gold); border: 2px solid var(--gold); }
+        .couple-btn.selected { background: var(--success); color: white; border-color: var(--success); }
+    </style>
+</head>
+<body>
+
+<div id="msg"></div>
+
+<!-- מסך פתיחה -->
+<div id="role-selection" class="container screen active">
+    <div class="chuppah-visual">
+        <img src="chuppah.jpg" alt="חופה" onerror="this.src='https://images.unsplash.com/photo-1519741497674-611481863552?q=80&w=1000&auto=format&fit=crop'">
+    </div>
+    <h1>בדרך לחופה 💍</h1>
+    <h3>מיכל וינון מתחתנים</h3>
+    <div style="display: flex; flex-direction: column;">
+        <button onclick="initApp('player')">אני משתתף/ת (אורח)</button>
+        <button onclick="initApp('couple')" style="background: linear-gradient(135deg, #FF69B4, #FF1493);">אנחנו הזוג (מיכל וינון)</button>
+        <button onclick="initApp('host')" style="background: #555;">מסך ראשי (הקרנה)</button>
+    </div>
+</div>
+
+<!-- הרשמה לאורח -->
+<div id="player-setup-1" class="container screen">
+    <h2>איך קוראים לכם?</h2>
+    <input id="playerName" type="text" placeholder="השם שלכם">
+    <p>תואר משפחתי מצחיק:</p>
+    <div id="descList"></div>
+    <input id="customDesc" type="text" placeholder="או תיאור חופשי...">
+    <button onclick="goToAvatarSelection()">המשך ⬅️</button>
+</div>
+
+<div id="player-setup-2" class="container screen">
+    <h2>בחרו אמוג'י</h2>
+    <div id="avatarList" class="avatar-grid"></div>
+    <button onclick="joinGame()">בואו נשחק! 🎉</button>
+</div>
+
+<!-- המתנה -->
+<div id="waiting-room" class="container screen">
+    <h2 id="wait-title">מתכוננים...</h2>
+    <div id="my-identity-preview" style="margin: 20px 0; font-weight: bold;"></div>
+    <div style="font-size: 60px;">💍</div>
+</div>
+
+<!-- משחק אורח -->
+<div id="player-game" class="container screen">
+    <h3 id="q-text"></h3>
+    <div id="q-options"></div>
+    <div id="p-status-box" style="margin-top: 15px; padding: 10px; border-radius: 10px; display: none;">
+        <p id="p-status"></p>
+    </div>
+</div>
+
+<!-- משחק הזוג (מיכל וינון) -->
+<div id="couple-game" class="container screen">
+    <h2 style="color: #FF1493;">השליטה בידיים שלכם! ❤️</h2>
+    <p id="couple-q-text" style="font-size: 20px; font-weight: bold;"></p>
+    <div id="couple-options"></div>
+    <p id="couple-waiting" style="color: #888; font-style: italic; display: none;">המשתתפים מהמרים... המתינו למנחה שיעבור שאלה.</p>
+</div>
+
+<!-- מנחה (מסך הקרנה) -->
+<div id="main-board-view" class="container screen">
+    <h1 id="host-q-title">המשחק של מיכל וינון</h1>
+    <p id="host-q-desc" style="font-size: 22px; font-weight: bold; color: var(--gold);"></p>
+    
+    <div id="host-reveal-status" style="display:none; margin: 15px 0; color: var(--success); font-weight: bold;">
+        הזוג בחר תשובה! הניקוד עודכן ✨
+    </div>
+
+    <div class="chuppah-path" id="path-container">
+        <div style="position: absolute; left: 10px; top: -30px; font-size: 60px;">💒</div>
+    </div>
+
+    <div id="host-controls">
+        <button id="startBtn" onclick="updateGameStep(0)">התחל משחק</button>
+        <button id="nextBtn" style="display:none;" onclick="stepForward()">סיטואציה הבאה ⬅️</button>
+        <button onclick="resetGame()" style="background: #f0f0f0; color: #666; font-size: 12px;">איפוס</button>
+    </div>
+</div>
+
+<script>
+/* ====== CONFIG & INIT ====== */
+const firebaseConfig = JSON.parse(__firebase_config);
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+const auth = firebase.auth();
+const appId = typeof __app_id !== 'undefined' ? __app_id : 'wedding-game-v7';
+
+const gameConfigDocPath = `artifacts/${appId}/public/data/config/gameStatus`;
+const participantsColPath = `artifacts/${appId}/public/data/participants`;
+
+const questions = [
+    { q: "לילה, אוגוסט. ינון רוצה 16 מעלות במזגן, מיכל רוצה שמיכת פוך וגרביים. מה עושים?", options: ["ינון נכנע וישן בחום", "מיכל ישנה עם מעיל דובון", "מכבים ומדליקים כל שעה", "פותחים חלון ורבים"], a: null },
+    { q: "דודה של ינון שלחה הודעה ב-2:00 בלילה על חלות שנשכחו. מה התגובה?", options: ["ינון עונה מיד", "מיכל משתיקה לו את הטלפון", "נכנסים לדיון 'מי זאת הדודה?'", "ינון עוזב את הקבוצה"], a: null },
+    { q: "מסלול טיול של רבע שעה הפך לשלוש שעות בקוצים. מי האשם?", options: ["ינון: 'רואים כבר את האוטו'", "מיכל: 'אמרתי לך שנלך לאיבוד'", "עוצרים לאכול במבה בצל", "מיכל מחכה למסוק חילוץ"], a: null },
+    { q: "מוצאי שבת, עייפות שיא. מי קם להכין את הנס?", options: ["אבן נייר ומספריים", "ינון משחד את מיכל", "אף אחד לא שותה", "ינון מכין ושוכח סוכר"], a: null },
+    { q: "ינון מאריך בדבר תורה בקידוש והאורחים רעבים. מה מיכל עושה?", options: ["משתעלת שיעול דיפלומטי", "נהנית ומבקשת עוד", "ינון קולט וחותך בשיא", "מתחילים ויכוח הלכתי"], a: null },
+    { q: "הגעה מהסופר עם 15 שקיות. ינון מנסה לקחת הכל במכה. איך זה נגמר?", options: ["פיצוץ של שקית חלב", "מיכל לוקחת שקית אחת קטנה", "ינון לא יכול להזיז את האצבעות", "משאירים חצי באוטו"], a: null }
+];
+
+const funnyDescs = ["ילדים שרודפים אחרי סוכריות", "אח ששכח להכין דבר תורה", "בן דוד שבא לעזור שמא יהיה בל תשחית", "האחות שמכינה מצגות", "סבא שדואג להכיר את כולם", "סבתא שרוקדת בלי הפסקה"];
+const avatars = [
+    // דמויות ומשפחה
+    "🤵‍♂️", "👰‍♀️", "🧔‍♂️", "👵", "👴", "👶", "💃", "🕺", "💑", "💏",
+    // חתונה ואהבה
+    "💒", "💍", "💐", "❤️", "💘", "💖", "🎉", "🎊", "🥂", "🍾", "🎁",
+    // מסורת ואווירה
+    "🕍", "📜", "🕯️", "🕊️", "🍷", "🍇", "🍎", "🍯", "🧿", "🍀", "🐞", "🤞",
+    // חגיגה וריקודים
+    "🎹", "🎶", "🎷", "🥁", "🥳", "🍰", "🥨", "🍉", "🥗", "🌿", "🌸", "🌹", "🌷", "🌻", "🌼", "🌴", "🏠", "👟"
+];
+
+let myState = { role: '', name: '', description: '', avatar: '', uid: '', score: 0 };
+
+async function initApp(role) {
+    myState.role = role;
+    try {
+        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+            await auth.signInWithCustomToken(__initial_auth_token);
+        } else {
+            await auth.signInAnonymously();
+        }
+        myState.uid = auth.currentUser.uid;
+        if (role === 'host') setupHostView();
+        else if (role === 'couple') setupCoupleView();
+        else setupPlayerSetup();
+    } catch (e) {
+        console.error("Auth failed", e);
+        toast("שגיאת חיבור", "var(--error)");
+    }
+}
+
+function showScreen(id) {
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    const target = document.getElementById(id);
+    if (target) target.classList.add('active');
+}
+
+function toast(text, color = 'var(--gold)') {
+    const m = document.getElementById('msg');
+    if (!m) return;
+    m.innerText = text; m.style.backgroundColor = color; m.style.display = 'block';
+    setTimeout(() => m.style.display = 'none', 2500);
+}
+
+/* ====== HOST LOGIC ====== */
+function setupHostView() {
+    showScreen('main-board-view');
+    db.doc(gameConfigDocPath).onSnapshot(doc => {
+        const data = doc.data() || { step: -1, correctAns: null };
+        const hDesc = document.getElementById('host-q-desc');
+        const startBtn = document.getElementById('startBtn');
+        const nextBtn = document.getElementById('nextBtn');
+        const revealStatus = document.getElementById('host-reveal-status');
+
+        if (data.step === -1) {
+            hDesc.innerText = "ממתינים למשפחה...";
+            startBtn.style.display = "inline-block";
+            nextBtn.style.display = "none";
+        } else if (data.step < questions.length) {
+            startBtn.style.display = "none";
+            nextBtn.style.display = "inline-block";
+            hDesc.innerText = questions[data.step].q;
+            revealStatus.style.display = (data.correctAns !== null) ? "block" : "none";
+        } else {
+            hDesc.innerText = "הגענו לחופה! מזל טוב!";
+            nextBtn.style.display = "none";
+        }
+    });
+
+    db.collection(participantsColPath).onSnapshot(snap => {
+        const parts = snap.docs.map(d => ({id: d.id, ...d.data()}));
+        renderPath(parts);
+    });
+}
+
+function renderPath(parts) {
+    const container = document.getElementById('path-container');
+    container.querySelectorAll('.participant-icon').forEach(el => el.remove());
+    const total = questions.length;
+    parts.forEach(p => {
+        const div = document.createElement('div');
+        div.className = 'participant-icon';
+        const progress = (p.score / total) * 85; 
+        div.style.right = `${progress}%`;
+        div.style.marginBottom = `${p.score * 5}px`;
+        let status = '';
+        if (p.lastCorrect === true) status = 'border-color: var(--success); box-shadow: 0 0 10px var(--success);';
+        if (p.lastCorrect === false) status = 'opacity: 0.6;';
+        div.innerHTML = `<div class="avatar-circle" style="${status}">${p.avatar || '👤'}</div><div class="participant-info">${p.name}</div>`;
+        container.appendChild(div);
+    });
+}
+
+async function updateGameStep(s) {
+    if (!auth.currentUser) return;
+    await db.doc(gameConfigDocPath).set({ step: s, correctAns: null }, { merge: true });
+}
+
+function stepForward() {
+    db.doc(gameConfigDocPath).get().then(doc => {
+        const next = (doc.data()?.step ?? -1) + 1;
+        updateGameStep(next);
+    });
+}
+
+async function resetGame() {
+    await updateGameStep(-1);
+    const snap = await db.collection(participantsColPath).get();
+    const batch = db.batch();
+    snap.docs.forEach(d => batch.delete(d.ref));
+    await batch.commit();
+}
+
+/* ====== COUPLE LOGIC (MICHAL & YINON) ====== */
+function setupCoupleView() {
+    showScreen('couple-game');
+    db.doc(gameConfigDocPath).onSnapshot(doc => {
+        const data = doc.data() || { step: -1, correctAns: null };
+        const qText = document.getElementById('couple-q-text');
+        const optionsDiv = document.getElementById('couple-options');
+        const waitingMsg = document.getElementById('couple-waiting');
+
+        if (data.step === -1 || data.step >= questions.length) {
+            qText.innerText = "המתינו שהמנחה יפעיל את המשחק...";
+            optionsDiv.innerHTML = "";
+            waitingMsg.style.display = "none";
+        } else {
+            if (data.correctAns !== null) {
+                qText.innerText = "הבחירה שלכם נקלטה!";
+                optionsDiv.innerHTML = "";
+                waitingMsg.style.display = "block";
+            } else {
+                qText.innerText = questions[data.step].q;
+                waitingMsg.style.display = "none";
+                renderCoupleOptions(questions[data.step].options, data.step);
+            }
+        }
+    });
+}
+
+function renderCoupleOptions(opts, step) {
+    const container = document.getElementById('couple-options');
+    container.innerHTML = "";
+    opts.forEach((o, i) => {
+        const btn = document.createElement('button');
+        btn.className = "couple-btn";
+        btn.innerText = o;
+        btn.onclick = () => submitCorrectAnswer(i, step);
+        container.appendChild(btn);
+    });
+}
+
+async function submitCorrectAnswer(idx, step) {
+    // This is the magic: The couple sets the answer, and we update all participants
+    const snap = await db.collection(participantsColPath).get();
+    const batch = db.batch();
+    
+    snap.docs.forEach(d => {
+        const p = d.data();
+        if (p.lastStep === step) {
+            const isCorrect = (p.choice === idx);
+            batch.update(d.ref, { 
+                lastCorrect: isCorrect, 
+                score: isCorrect ? (p.score + 1) : p.score 
+            });
+        }
+    });
+    
+    await batch.commit();
+    await db.doc(gameConfigDocPath).update({ correctAns: idx });
+    toast("תשובתכם נשלחה לכולם! ❤️", "var(--success)");
+}
+
+/* ====== PLAYER LOGIC ====== */
+function setupPlayerSetup() {
+    const dList = document.getElementById('descList');
+    dList.innerHTML = "";
+    funnyDescs.forEach(d => {
+        const c = document.createElement('div');
+        c.className = "selection-card"; c.innerText = d;
+        c.onclick = () => {
+            myState.description = d;
+            document.querySelectorAll('.selection-card').forEach(x => x.classList.remove('selected'));
+            c.classList.add('selected');
+        };
+        dList.appendChild(c);
+    });
+    const aList = document.getElementById('avatarList');
+    aList.innerHTML = "";
+    avatars.forEach(av => {
+        const o = document.createElement('div');
+        o.className = "avatar-option"; o.innerText = av;
+        o.onclick = () => {
+            myState.avatar = av;
+            document.querySelectorAll('.avatar-option').forEach(x => x.classList.remove('selected'));
+            o.classList.add('selected');
+        };
+        aList.appendChild(o);
+    });
+    showScreen('player-setup-1');
+}
+
+function goToAvatarSelection() {
+    myState.name = document.getElementById('playerName').value.trim();
+    if (!myState.name || !myState.description) return toast("מלאו את כל הפרטים", "var(--error)");
+    showScreen('player-setup-2');
+}
+
+async function joinGame() {
+    if (!myState.avatar) return toast("בחרו דמות", "var(--error)");
+    await db.doc(`${participantsColPath}/${myState.uid}`).set({
+        name: myState.name, description: myState.description, avatar: myState.avatar, score: 0, lastCorrect: null, lastStep: -1, choice: null
+    });
+    document.getElementById('my-identity-preview').innerText = `${myState.avatar} ${myState.name}`;
+    showScreen('waiting-room');
+    listenToGame();
+}
+
+function listenToGame() {
+    db.doc(gameConfigDocPath).onSnapshot(doc => {
+        const data = doc.data();
+        if (!data || data.step === -1) showScreen('waiting-room');
+        else if (data.step < questions.length) renderPlayerQuestion(data.step, data.correctAns);
+        else showScreen('waiting-room');
+    });
+}
+
+function renderPlayerQuestion(step, correct) {
+    const q = questions[step];
+    const qT = document.getElementById('q-text');
+    const qO = document.getElementById('q-options');
+    const pS = document.getElementById('p-status-box');
+    const pST = document.getElementById('p-status');
+
+    db.doc(`${participantsColPath}/${myState.uid}`).get().then(pDoc => {
+        const pData = pDoc.data();
+        if (!pData) return;
+        qT.innerText = q.q;
+        qO.innerHTML = "";
+        showScreen('player-game');
+
+        if (pData.lastStep === step) {
+            pS.style.display = "block";
+            if (correct !== null) {
+                pS.style.background = pData.lastCorrect ? "#e8f5e9" : "#fbe9e7";
+                pST.innerText = pData.lastCorrect ? "צדקתם! מיכל וינון באמת בחרו בזה ✨" : `אופס, הזוג בחר: ${q.options[correct]}`;
+            } else pST.innerText = "ההימור נשלח! מחכים שמיכל וינון יבחרו...";
+        } else pS.style.display = "none";
+
+        q.options.forEach((opt, i) => {
+            const btn = document.createElement('button');
+            btn.style.width = "100%"; btn.style.background = (pData.choice === i) ? "var(--gold-light)" : "white";
+            btn.style.color = "var(--text)"; btn.style.border = "1px solid #eee"; btn.innerText = opt;
+            btn.disabled = (pData.lastStep === step);
+            btn.onclick = async () => {
+                await db.doc(`${participantsColPath}/${myState.uid}`).update({ choice: i, lastStep: step });
+                renderPlayerQuestion(step, correct);
+            };
+            qO.appendChild(btn);
+        });
+    });
+}
+</script>
+</body>
+</html>
